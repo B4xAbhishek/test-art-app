@@ -1,0 +1,23 @@
+{
+  "name": "drawing-app-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Drawing App Test",
+  "keywords": [
+    "gatsby"
+  ],
+  "scripts": {
+    "develop": "gatsby develop",
+    "start": "gatsby develop",
+    "build": "gatsby build",
+    "serve": "gatsby serve",
+    "clean": "gatsby clean"
+  },
+  "dependencies": {
+    "gatsby": "^4.4.0",
+    "perfect-freehand": "^1.0.16",
+    "react": "^17.0.1",
+    "react-dom": "^17.0.1",
+    "roughjs": "^4.5.2"
+  }
+}
