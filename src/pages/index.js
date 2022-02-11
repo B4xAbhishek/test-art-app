@@ -160,14 +160,15 @@ const drawElement = (canvas, context, element, id, x1, y1, x2, y2) => {
       context.moveTo(x1, y1);
       context.lineTo(x2, y2);
       context.stroke();
+      break;
     case "rectangle":
       context.beginPath();
       context.rect(x1, y1, x2 - x1, y2 - y1);
       context.stroke();
       break;
     case "pencil":
-      const stroke = getSvgPathFromStroke(getStroke(element.points));
-      context.fill(new Path2D(stroke));
+      // const stroke = getSvgPathFromStroke(getStroke(element.points));
+      // context.fill(new Path2D(stroke));
       break;
     case "text":
       context.textBaseline = "top";
@@ -187,6 +188,8 @@ const IndexPage = () => {
   const [tool, setTool] = useState("text");
   const [selectedElement, setSelectedElement] = useState(null);
   const textAreaRef = useRef();
+  const canvasRef = useRef(null);
+  const ctxRef = useRef(null);
 
   useLayoutEffect(() => {
     const canvas = document.getElementById("canvas");
@@ -195,7 +198,7 @@ const IndexPage = () => {
 
     elements.forEach(element => {
       if (action === "writing" && selectedElement.id === element.id) return;
-      drawElement(canvas, context, element);
+      drawElement(canvas, context, element, element.id, element.x1, element.y1, element.x2, element.y2);
     });
   }, [elements, action, selectedElement]);
 
