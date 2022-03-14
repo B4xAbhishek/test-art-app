@@ -1,0 +1,25 @@
+.menu {
+  border: 1px solid gray;
+  width: 100%;
+}
+.btn {
+  padding: 0.5rem 1rem;
+  color: #fff;
+  background-color: gray;
+}
+/* for features */
+.color-1 {
+  background: white;
+}
+.color-2 {
+  background: purple;
+}
+.color-3 {
+  background: pink;
+}
+.color-4 {
+  background: red;
+}
+.color-5 {
+  background: black;
+}
