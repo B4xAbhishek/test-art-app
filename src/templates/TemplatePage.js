@@ -10,6 +10,8 @@ import {
   getDistance,
   getElementAtPosition,
 } from "../components/Element";
+import {act} from "@testing-library/react";
+import {func} from "prop-types";
 // import Menu from "../components/Menu";
 
 // grab the data
@@ -39,15 +41,21 @@ const useHistory = initialState => {
       setHistory([...updatedState, newState]);
       setIndex(prevState => prevState + 1);
     }
-  };
+  }
+
+  useEffect(()=>{
+    console.log("History ----------------------------------------------------------------------------- ")
+    console.log(index)
+    console.log(history)
+  }, [history.length, index])
 
   const undo = () => index > 0 && setIndex(prevState => prevState - 1);
   const redo = () => index < history.length - 1 && setIndex(prevState => prevState + 1);
 
-  return [history[index], setState, undo, redo];
-};
+  return [history[index], setState, undo, redo, index];
+}
 
-const drawElement = (canvas, ctx, element, id, x1, y1, x2, y2) => {
+const drawElement = (ctx, element, id, x1, y1, x2, y2) => {
   switch (element.type) {
     case "line":
       ctx.beginPath();
@@ -72,6 +80,7 @@ const drawElement = (canvas, ctx, element, id, x1, y1, x2, y2) => {
       ctx.stroke();
       break;
     case "text":
+      ctx.fillStyle = element.color
       ctx.textBaseline = "top";
       ctx.font = "24px sans-serif";
       ctx.fillText(element.text, element.x1, element.y1);
@@ -86,7 +95,6 @@ const adjustmentRequired = type => ["line", "circle"].includes(type);
 const TemplatePage = ({ data }) => {
   // all data for this interactive
   const settings = data.lesson;
-
   const [state, setState] = useState({
     title: settings.title,
     grade: settings.grade,
@@ -98,23 +106,48 @@ const TemplatePage = ({ data }) => {
   // const ctxRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [lineWidth, setLineWidth] = useState(5);
-  const [lineColor, setLineColor] = useState("black");
-  const [elements, setElements, undo, redo] = useHistory([]);
+  const [lineColor, setLineColor] = useState("#000000");
+  const [elements, setElements, undo, redo, actualIndex] = useHistory([]);
   const [action, setAction] = useState("none");
   const [tool, setTool] = useState("pencil");
   const [selectedElement, setSelectedElement] = useState(null);
   const textAreaRef = useRef();
   const [points, setPoints] = useState([]);
-  const [path, setPath] = useState([]);
+  // const [path, setPath] = useState([]);
+  const [selectedImage, setSelectedImage] = useState({img: [], index: 0})
+  const refInputFile = useRef()
+  const [boolLocalStorage, setBoolLocalStorage] = useState(false)
+
+  const drawPathPrime = (ctx, myPath = []) => {
+    ctx.beginPath();
+    myPath.forEach((point, i) => {
+      // ctx.strokeStyle = point.newColour;
+      ctx.lineWidth = point.newLinewidth;
+      var midPoint = midPointBtw(point.clientX, point.clientY);
+      ctx.quadraticCurveTo(
+          point.clientX,
+          point.clientY,
+          midPoint.x,
+          midPoint.y
+      );
+      ctx.lineTo(point.clientX, point.clientY);
+      ctx.stroke();
+    });
+    ctx.closePath();
+    ctx.save();
+  };
 
   useLayoutEffect(() => {
+    console.log("useLayoutEffect -------------------------------------------------------------- ")
+    console.log(elements)
+
     // const canvas = canvasRef.current;
     const canvas = document.getElementById("myCanvas");
     const ctx = canvas.getContext("2d");
 
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    ctx.strokeStyle = lineColor;
+    // ctx.strokeStyle = lineColor;
     ctx.lineWidth = lineWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -122,38 +155,108 @@ const TemplatePage = ({ data }) => {
 
     ctx.save();
 
-    const drawpath = () => {
-      path.forEach((stroke, index) => {
-        ctx.beginPath();
+    // const drawpath = (myPath = []) => {
+    //   path.forEach((stroke, index) => {
+    //     ctx.beginPath();
+    //
+    //     stroke.forEach((point, i) => {
+    //       ctx.strokeStyle = point.newColour;
+    //       ctx.lineWidth = point.newLinewidth;
+    //
+    //       var midPoint = midPointBtw(point.clientX, point.clientY);
+    //
+    //       ctx.quadraticCurveTo(
+    //         point.clientX,
+    //         point.clientY,
+    //         midPoint.x,
+    //         midPoint.y
+    //       );
+    //       ctx.lineTo(point.clientX, point.clientY);
+    //       ctx.stroke();
+    //     });
+    //     ctx.closePath();
+    //     ctx.save();
+    //   });
+    // };
+    // if (path !== undefined) drawpath();
 
-        stroke.forEach((point, i) => {
-          ctx.strokeStyle = point.newColour;
-          ctx.lineWidth = point.newLinewidth;
+    // if(selectedImage.img && selectedImage.img[0] && actualIndex > selectedImage.index){
+    //   const img = new Image;
+    //   img.src = URL.createObjectURL(selectedImage.img[0]);
+    //   img.onload = function() {
+    //     // Draw image first
+    //     ctx.drawImage(img, 0, 0);
+    //     // Draw other elements
+    //     elements.forEach(element => {
+    //       ctx.strokeStyle = element.color
+    //       if (action === "writing" && selectedElement.id === element.id) return;
+    //       if(element.type === "pencil") drawPathPrime(ctx, element.paths)
+    //       drawElement(ctx, element, element.id, element.x1, element.y1, element.x2, element.y2);
+    //     });
+    //   }
+    // }else{
+    //   elements.forEach(element => {
+    //     ctx.strokeStyle = element.color
+    //     if (action === "writing" && selectedElement.id === element.id) return;
+    //     if(element.type === "pencil") drawPathPrime(ctx, element.paths)
+    //     drawElement(ctx, element, element.id, element.x1, element.y1, element.x2, element.y2);
+    //   });
+    // }
 
-          var midPoint = midPointBtw(point.clientX, point.clientY);
+    // Draw image, if exist
+    if(selectedImage.img && selectedImage.img[0] && actualIndex > selectedImage.index){
+      const img = new Image;
+      img.src = URL.createObjectURL(selectedImage.img[0]);
+      img.onload = function() {
+        canvas.style.background = "url("+img.src+") no-repeat center center fixed";
+      }
+    } else {
+      canvas.style.background = "none";
+    }
 
-          ctx.quadraticCurveTo(
-            point.clientX,
-            point.clientY,
-            midPoint.x,
-            midPoint.y
-          );
-          ctx.lineTo(point.clientX, point.clientY);
-          ctx.stroke();
-        });
-        ctx.closePath();
-        ctx.save();
-      });
-    };
-
-    if (path !== undefined) drawpath();
-
+    // Draw all the elements
     elements.forEach(element => {
+      ctx.strokeStyle = element.color
       if (action === "writing" && selectedElement.id === element.id) return;
-      drawElement(canvas, ctx, element, element.id, element.x1, element.y1, element.x2, element.y2);
+      if(element.type === "pencil") drawPathPrime(ctx, element.paths)
+      drawElement(ctx, element, element.id, element.x1, element.y1, element.x2, element.y2);
     });
 
-  }, [lineColor, lineWidth, elements, action, selectedElement, path]);
+    // Save on cache (localstorage)
+    if(boolLocalStorage){
+      localStorage.setItem("canvasElements", JSON.stringify(elements))
+      if(selectedImage.img && selectedImage.img[0]){
+        console.log("save selectedImage.img :")
+        console.log(JSON.stringify(URL.createObjectURL(selectedImage.img[0])))
+        localStorage.setItem("canvasImage", JSON.stringify(URL.createObjectURL(selectedImage.img[0])))
+      }
+    }else{
+      const elementsCache = JSON.parse(localStorage.getItem("canvasElements"))
+      if(elementsCache){
+        setElements(elementsCache, true)
+      }
+      // const imageCache = JSON.parse(localStorage.getItem("canvasImage"))
+      // console.log("imageCache :")
+      // console.log(imageCache)
+      // if(imageCache){
+      //   const img = new Image()
+      //   img.src = imageCache
+      //   img.onload = function () {
+      //     canvas.style.background = "url("+ img.src+") no-repeat center center fixed";
+      //   }
+      // }
+        // const img = new Image()
+        // img.src = URL.createObjectURL(imageCache[0]);
+        // img.onload = function () {
+        //   refInputFile.current.value = imageCache
+        //   canvas.style.background = "url("+img.src+") no-repeat center center fixed";
+        // }
+      // }
+      setBoolLocalStorage(true)
+    }
+  }, [lineWidth, elements, action, selectedElement, selectedImage, actualIndex
+    // path, lineColor
+  ]);
 
   useEffect(() => {
     const undoRedoFunction = event => {
@@ -165,7 +268,6 @@ const TemplatePage = ({ data }) => {
         }
       }
     };
-
     document.addEventListener("keydown", undoRedoFunction);
     return () => {
       document.removeEventListener("keydown", undoRedoFunction);
@@ -180,17 +282,18 @@ const TemplatePage = ({ data }) => {
     }
   }, [action, selectedElement]);
 
-  const updateElement = (id, x1, y1, x2, y2, type, options) => {
+  const updateElement = (id, x1, y1, x2, y2, type, options, newPathPencil = []) => {
     const elementsCopy = [...elements];
 
     switch (type) {
       case "line":
       case "rectangle":
       case "circle":
-        elementsCopy[id] = createElement(id, x1, y1, x2, y2, type);
+        elementsCopy[id] = createElement(id, x1, y1, x2, y2, type, lineColor);
         break;
       case "pencil":
-        elementsCopy[id].points = [...elementsCopy[id].points, { x: x2, y: y2 }];
+        if(x2 && y2) elementsCopy[id].points = [...elementsCopy[id].points, { x: x2, y: y2 }];
+        if(newPathPencil.length !== 0) elementsCopy[id].paths = newPathPencil
         break;
       case "text":
         const textWidth = document
@@ -199,7 +302,7 @@ const TemplatePage = ({ data }) => {
           .measureText(options.text).width;
         const textHeight = 24;
         elementsCopy[id] = {
-          ...createElement(id, x1, y1, x1 + textWidth, y1 + textHeight, type),
+          ...createElement(id, x1, y1, x1 + textWidth, y1 + textHeight, type, lineColor),
           text: options.text,
         };
         break;
@@ -211,6 +314,7 @@ const TemplatePage = ({ data }) => {
   };
 
   const handleMouseDown = (e) => {
+
     const canvas = document.getElementById("myCanvas");
     const ctx = canvas.getContext("2d");
 
@@ -238,27 +342,27 @@ const TemplatePage = ({ data }) => {
       }
     } else {
       const id = elements.length;
-      const element = createElement(id, clientX, clientY, clientX, clientY, tool);
+      const element = createElement(id, clientX, clientY, clientX, clientY, tool, lineColor);
       setElements(prevState => [...prevState, element]);
       setSelectedElement(element);
-      setAction(tool === "text" ? "writing" : "drawing");}
+      setAction(tool === "text" ? "writing" : "drawing");
+    }
+    if (tool === "pencil") {
+      setAction("sketching");
 
-      if (tool === "pencil") {
-        setAction("sketching");
+      const newEle = {
+        clientX,
+        clientY
+      };
 
-        const newEle = {
-          clientX,
-          clientY,
-        };
+      setPoints((state) => [...state, newEle]);
 
-        setPoints((state) => [...state, newEle]);
-
-        ctx.strokeStyle = "black";
-        ctx.lineWidth = 10;
-        ctx.lineCap = 5;
-        ctx.moveTo(clientX, clientY);
-        ctx.beginPath();
-        setIsDrawing(true);
+      // ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 10;
+      ctx.lineCap = 5;
+      ctx.moveTo(clientX, clientY);
+      ctx.beginPath();
+      // setIsDrawing(true);
     }
   }
 
@@ -274,10 +378,11 @@ const TemplatePage = ({ data }) => {
 
     if (action === "sketching") {
       if (!isDrawing) return;
-      const colour = points[points.length - 1].newColour;
+      // const colour = points[points.length - 1].colour;
       const linewidth = points[points.length - 1].newLinewidth;
       const transparency = points[points.length - 1].transparency;
-      const newEle = { clientX, clientY, colour, linewidth, transparency };
+      // const newEle = { clientX, clientY, colour, linewidth, transparency };
+      const newEle = { clientX, clientY, linewidth, transparency };
 
       setPoints((state) => [...state, newEle]);
       var midPoint = midPointBtw(clientX, clientY);
@@ -323,6 +428,7 @@ const TemplatePage = ({ data }) => {
   const handleMouseUp = (e) => {
     const canvas = document.getElementById("myCanvas");
     const ctx = canvas.getContext("2d");
+
     ctx.closePath();
     setIsDrawing(false);
 
@@ -342,10 +448,11 @@ const TemplatePage = ({ data }) => {
         const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
         updateElement(id, x1, y1, x2, y2, type);
       } else if (action === "sketching") {
+        // console.log(points)
+        updateElement(id, undefined, undefined, undefined, undefined, type, undefined, points)
         ctx.closePath();
-        const element = points;
+        // setPath((prevState) => [...prevState, points]); //tuple
         setPoints([]);
-        setPath((prevState) => [...prevState, element]); //tuple
         setIsDrawing(false);
       }
       setAction("none");
@@ -362,7 +469,7 @@ const TemplatePage = ({ data }) => {
     setAction("none");
     setSelectedElement(null);
     updateElement(id, x1, y1, null, null, type, { text: e.target.value });
-  };
+  }
 
   const eraser = (ctx) => ctx.globalCompositeOperation = "destination-out"
 
@@ -370,34 +477,100 @@ const TemplatePage = ({ data }) => {
     const canvas = document.getElementById("myCanvas");
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    setElements([], false)
+    if(selectedImage.img && selectedImage.img[0]){
+      setSelectedImage({img: [], index: 0})
+      refInputFile.current.value = ""
+    }
   }
 
   const download = async () => {
-    const canvas = document.getElementById("myCanvas");
-   
-    const image = canvas.toDataURL('image/png');
-    const blob = await (await fetch(image)).blob();
-    const blobURL = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobURL;
-    link.download = "image.png";
-    link.click();
+    const canvas = document.getElementById("myCanvasDownload");
+    const ctx = canvas.getContext("2d");
+
+    if(selectedImage.img && selectedImage.img[0]){
+      const img = new Image;
+      img.src = URL.createObjectURL(selectedImage.img[0]);
+      img.onload = async function() {
+        // Draw image first
+        ctx.drawImage(img,0,0);
+        // Draw the rest of shapes
+        elements.forEach(element => {
+          ctx.strokeStyle = element.color
+          if (action === "writing" && selectedElement.id === element.id) return;
+          if(element.type === "pencil") drawPathPrime(ctx, element.paths)
+          drawElement(ctx, element, element.id, element.x1, element.y1, element.x2, element.y2);
+        });
+        // Download
+        const image = canvas.toDataURL('image/png');
+        const blob = await (await fetch(image)).blob();
+        const blobURL = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobURL;
+        link.download = "image.png";
+        link.click();
+      }
+    }else{
+      // Draw the rest of shapes
+      elements.forEach(element => {
+        ctx.strokeStyle = element.color
+        if (action === "writing" && selectedElement.id === element.id) return;
+        if(element.type === "pencil") drawPathPrime(ctx, element.paths)
+        drawElement(ctx, element, element.id, element.x1, element.y1, element.x2, element.y2);
+      });
+      // Download
+      const image = canvas.toDataURL('image/png');
+      const blob = await (await fetch(image)).blob();
+      const blobURL = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobURL;
+      link.download = "image.png";
+      link.click();
+    }
   }
+
+  // const download = async () => {
+  //   const canvas = document.getElementById("myCanvas");
+  //
+  //   // Download
+  //   const image = canvas.toDataURL('image/jpg');
+  //   const blob = await (await fetch(image)).blob();
+  //   const blobURL = URL.createObjectURL(blob);
+  //   const link = document.createElement('a');
+  //   link.href = blobURL;
+  //   link.download = "image.png";
+  //   link.click();
+  // }
+
+  // const imageUpload = (e) => {
+  //   const canvas = document.getElementById("myCanvas");
+  //   const ctx = canvas.getContext("2d");
+  //
+  //   if (e.target.files && e.target.files[0]) {
+  //     let FR = new FileReader();
+  //     FR.onload = function(e) {
+  //       let img = new Image();
+  //       img.src = e.target.result;
+  //       img.onload = function() {
+  //         ctx.drawImage(img, 0, 0);
+  //       };
+  //     }
+  //     FR.readAsDataURL(e.target.files[0]);
+  //   }
+  // }
 
   const imageUpload = (e) => {
     const canvas = document.getElementById("myCanvas");
-    const ctx = canvas.getContext("2d");
 
     if (e.target.files && e.target.files[0]) {
-      var FR = new FileReader();
-      FR.onload = function(e) {
-        var img = new Image();
-        img.src = e.target.result;
-        img.onload = function() {
-        ctx.drawImage(img, 0, 0);
-        };   
+      setSelectedImage(e.target.files)
+      const img = new Image;
+      img.src = URL.createObjectURL(e.target.files[0]);
+      img.onload = function() {
+        canvas.style.background = "url("+img.src+") no-repeat center center fixed";
       }
-      FR.readAsDataURL(e.target.files[0]);
+    } else{
+      canvas.style.background = "none";
     }
   }
 
@@ -418,27 +591,9 @@ const TemplatePage = ({ data }) => {
       setLineColor(currentSecondary);
     }
   }
- 
-  useEffect(() => {
-    const canvas = document.getElementById("myCanvas");
-    const ctx = canvas.getContext("2d");
-
-    localStorage.setItem("myCanvas", canvas.toDataURL());
-    const dataURL = localStorage.getItem(canvas);
-
-    if (localStorage.getItem(dataURL)){ 
-      var img = new Image();
-      img.src = dataURL;
-      img.onload = function(){
-        ctx.drawImage(img, 0, 0);
-      };
-    } else {
-      localStorage.setItem("myCanvas", canvas.toDataURL());
-    }
-  },[])
 
   return (
-    <div className={`Main ${settings.slug}`}>
+    <div className={`Main ${settings.slug}`} style={{position: "relative"}}>
       {/* <h1>{state.title}</h1>
       <p>Grade: {state.grade}</p>
       <p>Features:</p>
@@ -466,9 +621,16 @@ const TemplatePage = ({ data }) => {
               setLineWidth(e.target.value);
             }}
           />
-          <input 
-            type="file" 
-            onChange={imageUpload}
+          <input
+              ref={refInputFile}
+              type="file"
+              // onChange={imageUpload}
+              onChange={e =>{
+                console.log(`e.target.files : ${e.target.files}`)
+                setElements([...elements], false)
+                if(e.target.files && e.target.files[0]) setSelectedImage({img: e.target.files, index: actualIndex})
+                else setSelectedImage({img: [], index: 0})
+              }}
           />
           <label>More Color </label>
           <input
@@ -548,6 +710,7 @@ const TemplatePage = ({ data }) => {
           ref={textAreaRef}
           onBlur={handleBlur}
           style={{
+            color: lineColor,
             position: "fixed",
             top: selectedElement.y1 - 2,
             left: selectedElement.x1,
@@ -571,10 +734,35 @@ const TemplatePage = ({ data }) => {
           // ref={canvasRef}
           width={window.innerWidth}
           height={window.innerHeight}
+          style={{
+            // visibility: "hidden",
+            // position: "relative",
+            // "z-index": 0
+          }}
         />
+      {/*<canvas*/}
+      {/*    id={"myCanvasImage"}*/}
+      {/*    width={window.innerWidth}*/}
+      {/*    height={window.innerHeight}*/}
+      {/*    style={{*/}
+      {/*      // visibility: "hidden",*/}
+      {/*      position: "absolute",*/}
+      {/*      background: "red",*/}
+      {/*      "z-index": -1*/}
+      {/*    }}*/}
+      {/*/>*/}
+        <canvas
+          id={"myCanvasDownload"}
+          width={window.innerWidth}
+          height={window.innerHeight}
+          style={{
+            visibility: "hidden",
+            position: "absolute"
+          }}
+          />
       {/* <Workspace /> */}
     </div>
-  );
-};
+  )
+}
 
 export default TemplatePage;
